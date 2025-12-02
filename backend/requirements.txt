@@ -1,0 +1,16 @@
+pandas
+numpy
+scikit-learn
+tensorflow
+xgboost
+joblib
+geopy
+tqdm
+faker
+networkx
+matplotlib
+ctgan 
+flwr 
+shap 
+ipython 
+ray
