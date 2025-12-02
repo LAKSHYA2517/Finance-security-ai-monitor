@@ -9,3 +9,8 @@ tqdm
 faker
 networkx
 matplotlib
+ctgan 
+flwr 
+shap 
+ipython 
+ray
