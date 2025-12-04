@@ -14,67 +14,66 @@ class FeedbackRequest(BaseModel):
     log_id: str
     action: str  # "verify_safe" or "confirm_fraud"
 
+# ... imports ...
+
 @router.post("/analyze-login", response_model=AnalysisResponse)
 async def analyze_login(data: LoginEvent, request: Request):
     try:
-        # 1. Run AI Models
+        # 1. Run Real AI Models
         scores = ai_engine.predict(data.user_id, data.features, data.sequence_data)
         
-        # 🟢 DEBUG PRINT: See exactly what the models are thinking in your terminal
-        print(f"🧐 User: {data.user_id} | Features: {data.features[0]} | Scores: {scores}")
+        # 2. DEFAULT VALUES
+        final_risk = 0.0
+        reason = "Normal Activity"
 
-        # --- 2. LOGIC OVERRIDES ---
-
-        # ✅ SAFETY OVERRIDE (The Fix)
-        # If the first feature is exactly 0.1 (from our Safe Button), force Low Risk.
+        # --- 3. LOGIC CHAIN (Order Matters!) ---
+        
+        # PRIORITY 1: Safety Override (Green Button)
         if data.features[0] == 0.1:
-            final_risk = 0.05
-            scores['iso'] = 0.0
-            scores['ae'] = 0.0
-            scores['lstm'] = 0.0
-            
-        # 🚨 CONTEXT ATTACK TRIGGER
-        elif data.features[0] == 100.0: 
+            final_risk = 0.01
+            reason = "Verified Safe"
+
+        # PRIORITY 2: Fraud Ring (Check this FIRST because it's a hard blacklist)
+        # Trigger: High Network Score OR Specific Demo User
+        elif scores['network'] > 0.8 or data.user_id == "user_101":
             final_risk = 0.99
-            scores['iso'] = 1.0 
-            
-        # 🤖 BOT ATTACK TRIGGER (Repetitive 1s)
-        elif len(data.sequence_data) > 2 and data.sequence_data[0] == data.sequence_data[1]:
-            final_risk = 0.88
-            scores['lstm'] = 0.95
+            reason = "Linked to Known Fraud Ring"
 
-        # 🕸️ FRAUD RING TRIGGER
-        elif scores['network'] > 0.8:
-            final_risk = 0.92
+        # PRIORITY 3: Bot Attack (Check this NEXT because sequence is distinct)
+        # Trigger: Repetitive Sequence OR High LSTM Score
+        elif (len(data.sequence_data) > 2 and data.sequence_data[0] == data.sequence_data[1]) or scores['lstm'] > 0.8:
+            final_risk = 0.95
+            reason = "Automated Bot Behavior Detected"
 
-        # ⚖️ STANDARD LOGIC (If no overrides match)
+        # PRIORITY 4: Impossible Travel (The "Catch-All" for weird data)
+        # Trigger: Extreme Feature Values OR High Isolation Forest Score
+        elif data.features[0] == 100.0 or scores['iso'] > 0.7 or scores['ae'] > 0.7:
+            final_risk = 0.90
+            reason = "Impossible Travel Detected"
+
+        # PRIORITY 5: Standard Fallback (Real AI Weighted Average)
         else:
-            # We revert to Weighted Average because "Max Signal" was too sensitive
-            final_risk = (
-                (scores['iso'] * 0.25) + 
-                (scores['ae'] * 0.25) + 
-                (scores['lstm'] * 0.25) + 
-                (scores['network'] * 0.25)
-            )
+            final_risk = (scores['iso']*0.25 + scores['ae']*0.25 + scores['lstm']*0.25 + scores['network']*0.25)
+            if final_risk > 0.7: reason = "High Cumulative Risk"
 
-        # 3. VERDICT
+        # --- 4. VERDICT & LOGGING ---
         verdict = "ALLOW"
         if final_risk > 0.80: verdict = "BLOCK"
         elif final_risk > 0.50: verdict = "MFA_CHALLENGE"
 
-        # --- 4. LOG ENTRY ---
         log_id = str(uuid.uuid4())
-        is_attack = final_risk > 0.75 # Lowered threshold slightly for visual alert
+        is_attack = final_risk > 0.80
         
         log_entry = {
             "id": log_id,
             "time": datetime.now().strftime("%b %d, %I:%M %p"),
             "ip": "203.0.113.42" if is_attack else "192.168.1.5",
             "location": "Moscow, Russia" if is_attack else "New York, USA",
-            "device": "Unknown Linux" if is_attack else "Chrome / Windows",
+            "device": "Unknown/Linux" if is_attack else "Chrome/Windows",
             "risk_score": round(final_risk, 2),
             "status": "Success" if verdict == "ALLOW" else "Blocked" if verdict == "BLOCK" else "Suspicious",
             "verdict": verdict,
+            "reason": reason, # Correct Reason
             "user_feedback": None,
             "breakdown": scores 
         }
@@ -82,19 +81,15 @@ async def analyze_login(data: LoginEvent, request: Request):
         transaction_history.insert(0, log_entry)
         if len(transaction_history) > 50: transaction_history.pop()
 
-        # 5. ALERT
         if is_attack:
             await request.app.state.manager.broadcast({
                 "type": "CRITICAL_ALERT",
-                "message": f"Suspicious login blocked from {log_entry['location']}",
+                "message": f"🚫 {reason}",
                 "log": log_entry
             })
 
         return AnalysisResponse(
-            user_id=data.user_id,
-            verdict=verdict,
-            risk_score=round(final_risk, 4),
-            breakdown=scores
+            user_id=data.user_id, verdict=verdict, risk_score=round(final_risk, 4), breakdown=scores
         )
         
     except Exception as e:

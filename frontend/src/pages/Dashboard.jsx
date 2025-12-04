@@ -32,11 +32,20 @@ const Dashboard = () => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "CRITICAL_ALERT") {
-          const newAlert = { id: Date.now(), msg: data.message };
-          setAlerts(prev => [newAlert, ...prev]);
+          
+          // 🛡️ PREVENT DUPLICATES: Create a unique ID based on time
+          const newAlertId = Date.now();
+          
+          setAlerts(prev => {
+            // Check if we received an alert in the last 500ms (debounce)
+            const recent = prev.find(a => newAlertId - a.id < 500);
+            if (recent) return prev; // Ignore duplicate
+
+            return [{ id: newAlertId, msg: data.message }, ...prev];
+          });
           
           // Auto-remove alert after 5 seconds
-          setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== newAlert.id)), 5000);
+          setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== newAlertId)), 5000);
           
           // Refresh table immediately
           fetchHistory(); 
@@ -154,12 +163,10 @@ const Dashboard = () => {
             <Smartphone size={16}/> Launch App
           </div>
           
+          <div className="nav-item"><Bell size={18}/> Alerts</div>
           <div className="nav-item"><Settings size={18}/> Settings</div>
         </div>
-        <div className="nav-profile">
-          <div className="avatar">AD</div>
-          <span>Admin</span>
-        </div>
+        {/* REMOVED: Admin Profile Section */}
       </nav>
 
       {/* STATS GRID */}
@@ -270,6 +277,7 @@ const Dashboard = () => {
                 <th>Location</th>
                 <th>Device</th>
                 <th>Risk Score</th>
+                <th>Analysis (Reason)</th> 
                 <th>Status</th>
                 <th>Action</th>
               </tr>
@@ -288,6 +296,10 @@ const Dashboard = () => {
                     }}>
                       {(row.risk_score * 100).toFixed(0)}%
                     </div>
+                  </td>
+
+                  <td style={{fontSize:'13px', fontWeight:'600', color: row.risk_score > 0.5 ? '#ee5d50' : '#a3aed0'}}>
+                      {row.reason || "Standard Login"}
                   </td>
                   
                   <td>
