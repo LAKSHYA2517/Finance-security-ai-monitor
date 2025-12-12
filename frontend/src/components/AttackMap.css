@@ -1,0 +1,66 @@
+/* Remove default leaflet background if needed */
+.leaflet-container {
+  background: #0f172a !important; /* Matches dark theme */
+  font-family: 'Inter', sans-serif;
+}
+
+/* --- PULSING MARKER --- */
+.radar-marker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* The Center Dot */
+.radar-dot {
+  width: 12px;
+  height: 12px;
+  background-color: #ef4444; /* Danger Red */
+  border-radius: 50%;
+  box-shadow: 0 0 10px #ef4444;
+  position: relative;
+  z-index: 2;
+}
+
+/* The Ripple Effect */
+.radar-pulse {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background-color: rgba(239, 68, 68, 0.6);
+  border-radius: 50%;
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  z-index: 1;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4); /* Expands outward */
+    opacity: 0;
+  }
+}
+
+/* --- CUSTOM POPUP --- */
+.leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.9); /* Dark Glass */
+  backdrop-filter: blur(10px);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.leaflet-popup-content {
+  margin: 10px;
+  font-size: 12px;
+  text-align: center;
+}

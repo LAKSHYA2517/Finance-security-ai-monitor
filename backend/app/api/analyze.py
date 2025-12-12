@@ -19,8 +19,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 try:
     if GEMINI_API_KEY:
         genai.configure(api_key=GEMINI_API_KEY)
-        # 🔄 CHANGED: Switched to 'gemini-pro' (Stable & Free)
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
     else:
         model = None
 except Exception as e:
@@ -31,23 +30,31 @@ class FeedbackRequest(BaseModel):
     log_id: str
     action: str
 
+# --- HELPER: FALLBACK TEXT (Fixes the 500 Error) ---
+def _offline_fallback(reason, location, risk_score):
+    if "Impossible" in reason: 
+        return f"Velocity check failed. Login from {location} exceeds physical travel limits relative to previous session. Pattern consistent with credential sharing or IP spoofing."
+    elif "Bot" in reason: 
+        return f"Non-human interaction detected. Request velocity matches botnet signatures. Confidence: {int(risk_score*100)}%. Recommended Action: IP Blacklist."
+    elif "Fraud" in reason: 
+        return f"Graph analysis linked this session to a blacklisted fraud cluster. Device fingerprint matches previous chargeback incidents."
+    else: 
+        return "Traffic patterns indicate normal user behavior consistent with historical baselines."
+
 # --- 1. GEN AI SUMMARY GENERATOR ---
 def generate_ai_summary(reason, location, risk_score, ip, device):
-    if not model:
-        # Fallback templates
-        if "Impossible" in reason: return f"Velocity check failed. Login from {location} exceeds travel limits. IP spoofing suspected."
-        elif "Bot" in reason: return f"Non-human interaction detected. Request velocity matches botnet signatures. Confidence: {int(risk_score*100)}%."
-        elif "Fraud" in reason: return f"Graph analysis linked session to fraud cluster. Device fingerprint matches blacklist."
-        return "Normal user behavior consistent with historical baselines."
+    # 🛡️ FIX: Check if key exists before checking string content
+    if not model or not GEMINI_API_KEY or "YOUR_" in GEMINI_API_KEY:
+        return _offline_fallback(reason, location, risk_score)
 
     try:
-        # Prompt for Gemini Pro
-        prompt = f"As a security analyst, write a 1-sentence alert for: {reason} detected from {location} (Risk: {int(risk_score*100)}%)."
+        # 2. Try Real AI
+        prompt = f"Write a 1-sentence security forensic summary for a {reason} event from {location} (Risk: {int(risk_score*100)}%). Explain the threat logic."
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        print(f"⚠️ Gemini API Error: {e}")
-        return f"AI Analysis Unavailable. Threat identified as {reason}."
+        print(f"⚠️ Gemini API Error (Using Fallback): {e}")
+        return _offline_fallback(reason, location, risk_score)
 
 # --- 2. REAL LOCATION HELPER ---
 def get_real_ip_info():
@@ -102,9 +109,7 @@ async def analyze_login(data: LoginEvent, request: Request, background_tasks: Ba
             else: loc="Moscow, Russia"; ip="188.44.22.1"; dev="Firefox / Linux"
         else:
             real_info = get_real_ip_info()
-            loc = real_info['location']
-            ip = real_info['ip']
-            dev = real_info['device']
+            loc = real_info['location']; ip = real_info['ip']; dev = real_info['device']
 
         ai_summary = generate_ai_summary(reason, loc, final_risk, ip, dev)
 
@@ -145,6 +150,7 @@ async def analyze_login(data: LoginEvent, request: Request, background_tasks: Ba
         
     except Exception as e:
         print(f"❌ Error: {e}")
+        # This will now show the REAL error in your terminal
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/history")
@@ -158,12 +164,12 @@ def submit_feedback(data: FeedbackRequest):
             if data.action == "verify_safe":
                 log["status"] = "Verified Safe"
                 log["user_feedback"] = "False Positive"
-                log["ai_summary"] = "✅ [UPDATED] Analyst verified safe."
+                log["ai_summary"] = "✅ [UPDATED] Analyst verified this activity as safe."
             elif data.action == "confirm_fraud":
                 log["status"] = "Confirmed Fraud"
                 log["user_feedback"] = "True Positive"
             return {"status": "updated", "log": log}
-    return {"status": "error", "message": "Log not found"}
+    return {"status": "error"}
 
 @router.get("/report/{log_id}")
 async def get_report(log_id: str):

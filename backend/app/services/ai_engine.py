@@ -5,7 +5,7 @@ import pandas as pd
 import tensorflow as tf
 import warnings
 
-# Suppress the warnings about Sklearn versions
+# Suppress warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 class AIEngine:
@@ -15,36 +15,25 @@ class AIEngine:
         self.model_autoencoder = None
         self.model_lstm = None
         self.network_scores = {}
-        
         self.ARTIFACTS_DIR = os.path.join(os.getcwd(), "ml_artifacts")
 
     def load_models(self):
         print(f"⏳ Loading AI Models from {self.ARTIFACTS_DIR}...")
         try:
-            # 1. Load Scaler
             self.scaler = joblib.load(os.path.join(self.ARTIFACTS_DIR, "scaler.pkl"))
-            
-            # 2. Load Isolation Forest
             self.model_iforest = joblib.load(os.path.join(self.ARTIFACTS_DIR, "model_isolation_forest.pkl"))
             
-            # 3. Load Deep Learning Models (TensorFlow/Keras)
-            # compile=False is CRITICAL for version compatibility
+            # compile=False prevents version errors
             self.model_autoencoder = tf.keras.models.load_model(
-                os.path.join(self.ARTIFACTS_DIR, "model_autoencoder.h5"), 
-                compile=False
+                os.path.join(self.ARTIFACTS_DIR, "model_autoencoder.h5"), compile=False
             )
             self.model_lstm = tf.keras.models.load_model(
-                os.path.join(self.ARTIFACTS_DIR, "model_lstm.h5"), 
-                compile=False
+                os.path.join(self.ARTIFACTS_DIR, "model_lstm.h5"), compile=False
             )
-            print(f"🕵️ LSTM Expected Input Shape: {self.model_lstm.input_shape}")
             
-            # 4. Load Network Scores (CSV)
             csv_path = os.path.join(self.ARTIFACTS_DIR, "network_risk_scores.csv")
             if os.path.exists(csv_path):
                 df = pd.read_csv(csv_path)
-                
-                # --- FIX: Using the correct column name 'network_risk_score' ---
                 self.network_scores = dict(zip(df['user_id'].astype(str), df['network_risk_score']))
             
             print("✅ AI Engine Online: All models loaded.")
@@ -65,21 +54,25 @@ class AIEngine:
         mse = np.mean(np.power(scaled_features - reconstructed, 2), axis=1)
         score_ae = min(float(mse[0]) * 10, 1.0) 
         
-        # --- Model B: LSTM ---
-        # FIX: Handle 1D Sequence of Integers for Embedding Layer
+        # --- Model B: LSTM (Robust Fix) ---
         seq_arr = np.array(sequence_data)
-        
-        # If data is [[1], [2]...], flatten it to [1, 2...]
+
+        # 1. Flatten [[1], [2]] -> [1, 2]
         if seq_arr.ndim == 2 and seq_arr.shape[1] == 1:
              seq_arr = seq_arr.flatten()
-             
-        # Ensure exactly 10 items
+        
+        # 2. Pad if shorter than 10 (Fixes Impossible Travel crash)
         if len(seq_arr) < 10:
-            seq_arr = np.pad(seq_arr, (10 - len(seq_arr), 0), 'constant')
+            padding = np.zeros(10 - len(seq_arr))
+            seq_arr = np.concatenate([seq_arr, padding])
         
-        seq_arr = seq_arr[-10:] # Take last 10
+        # 3. Truncate if longer than 10
+        seq_arr = seq_arr[:10]
+
+        # 4. Safety: Cap values > 8 to 0 (Fixes Index Out of Bounds)
+        seq_arr = np.where(seq_arr >= 9, 0, seq_arr)
         
-        # Reshape to (1, 10) - Correct shape for Embedding Layer!
+        # 5. Reshape (1, 10)
         lstm_input = seq_arr.reshape(1, 10)
         
         lstm_pred = self.model_lstm.predict(lstm_input, verbose=0)

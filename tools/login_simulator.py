@@ -4,9 +4,12 @@ import random
 import sys
 
 # --- CONFIGURATION ---
-# If running locally:
+# Un-comment the one you are using:
+
+# 1. LOCALHOST (For testing on your laptop)
 # API_URL = "http://127.0.0.1:8000/security/analyze-login"
-# If running on Render/Vercel, change to:
+
+# 2. RENDER (For the Final Demo)
 API_URL = "https://finance-security-ai-monitor.onrender.com/security/analyze-login"
 
 # Colors for Terminal
@@ -26,14 +29,13 @@ def send_request(user_id, features, sequence, attack_name):
     
     try:
         start = time.time()
-        res = requests.post(API_URL, json=payload, timeout=5)
+        res = requests.post(API_URL, json=payload, timeout=10)
         latency = round((time.time() - start) * 1000)
         
         if res.status_code == 200:
             data = res.json()
             verdict = data.get("verdict")
             risk = int(data.get("risk_score", 0) * 100)
-            reason = data.get("breakdown", {}).get("reason", "Unknown") # If you added reason to breakdown
             
             if verdict == "BLOCK":
                 print(f"{RED}[BLOCKED]{RESET} {attack_name} | Risk: {risk}% | User: {user_id} | {latency}ms")
@@ -42,13 +44,14 @@ def send_request(user_id, features, sequence, attack_name):
             else:
                 print(f"{GREEN}[ALLOWED]{RESET} {attack_name} | Risk: {risk}% | User: {user_id} | {latency}ms")
         else:
-            print(f"{RED}[ERROR]{RESET} Server returned {res.status_code}")
+            print(f"{RED}[ERROR]{RESET} Server Error {res.status_code}: {res.text[:50]}...")
             
     except Exception as e:
-        print(f"{RED}[FAIL]{RESET} Could not connect to backend. Is it running? {e}")
+        print(f"{RED}[FAIL]{RESET} Connection error: {e}")
 
 def run_simulation():
     print(f"\n{YELLOW}🛡️  SECUREWATCH AI - LIVE ATTACK SIMULATOR{RESET}")
+    print(f"Target: {API_URL}")
     print("------------------------------------------------")
     
     while True:
@@ -59,31 +62,35 @@ def run_simulation():
         print("4. 🕸️ Fraud Ring (Device Reuse)")
         print("5. Exit")
         
-        choice = input("\nExecute Command [1-5]: ")
+        choice = input("\nExecute Command [1-5]: ").strip()
         
         if choice == '1':
             print(f"\n{GREEN}>>> Generating Legitimate Traffic...{RESET}")
-            for _ in range(5):
+            for _ in range(3):
                 user = random.choice(USERS)
-                # Feature[0] = 0.1 triggers "Safe" logic in backend
+                # Feature[0] = 0.1 triggers "Safe" logic
                 send_request(user, [0.1, 0.5, 0.5, 0.5], [[1],[2],[3],[4],[1],[2],[3],[4],[1],[2]], "Normal")
                 time.sleep(0.5)
 
         elif choice == '2':
             print(f"\n{YELLOW}>>> Simulating Impossible Travel...{RESET}")
-            # Feature[0] = 100.0 triggers "Impossible Travel" logic
-            send_request("traveler_joe", [100.0, 50.0, 10.0, 5.0], [[1]*10], "Geo-Hopping")
+            # Feature[0] = 100.0 triggers "Impossible Travel"
+            # FIX: Used list comprehension to create [[1], [1]...] instead of [[1, 1...]]
+            seq_data = [[1] for _ in range(10)] 
+            send_request("traveler_joe", [100.0, 50.0, 10.0, 5.0], seq_data, "Geo-Hopping")
             
         elif choice == '3':
             print(f"\n{RED}>>> Launching Bot Swarm...{RESET}")
-            for i in range(10):
+            for i in range(5):
                 # Repetitive sequence triggers "Bot" logic
-                send_request(f"bot_{i}", [0.5, 0.5, 0.5, 0.5], [[1],[1],[1],[1],[1],[1],[1],[1],[1],[1]], "Bot Script")
-                time.sleep(0.1) # Fast fire
+                bot_seq = [[1] for _ in range(10)]
+                send_request(f"bot_{i}", [0.5, 0.5, 0.5, 0.5], bot_seq, "Bot Script")
+                time.sleep(0.1) 
                 
         elif choice == '4':
             print(f"\n{RED}>>> Injecting Fraud Ring Identity...{RESET}")
             # user_101 triggers "Fraud Ring" logic
+            # Sending short sequence (3 items) to test padding
             send_request("user_101", [0.5, 0.5, 0.5, 0.5], [[1],[2],[3]], "Blacklisted ID")
             
         elif choice == '5':
