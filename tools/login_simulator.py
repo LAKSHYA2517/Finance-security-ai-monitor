@@ -1,180 +1,113 @@
-import argparse
-import json
-import random
-import sys
-import time
-from datetime import datetime
 import requests
+import random
+import argparse
+import time
 
-# Hardcoded Configuration
-API_URL = "https://secure-watch-ai.vercel.app/api/login"
+API_URL = input("Enter backend URL : ")
 
-TEST_USERS = [
-    {"username": "alice", "password": "password123"},
-    {"username": "bob", "password": "password123"},
-    {"username": "charlie", "password": "password123"},
-    {"username": "dave", "password": "password123"},
-    {"username": "eve", "password": "password123"},
-    {"username": "frank", "password": "password123"},
-    {"username": "grace", "password": "password123"},
-    {"username": "heidi", "password": "password123"},
+
+USERS = [
+    "alice", "bob", "charlie", "diana",
+    "eve", "frank", "george", "harry"
 ]
 
-# Mapping cities to IPs for "geoposition-based" logic
-GEO_IPS = {
-    "New York": "192.168.1.101",
-    "London": "192.168.1.102",
-    "Tokyo": "192.168.1.103",
-    "Paris": "192.168.1.104",
-    "Sydney": "192.168.1.105",
-    "Berlin": "192.168.1.106",
-    "Beijing": "192.168.1.107",
-    "Moscow": "192.168.1.108",
-    "Brazil": "192.168.1.109",
-    "Cairo": "192.168.1.110"
-}
-GEO_KEYS = list(GEO_IPS.keys())
+# -------------------------
+# SEND EVENT
+# -------------------------
+def send_event(user_id, features, sequence_data):
+    payload = {
+        "user_id": user_id,
+        "features": features,
+        "sequence_data": sequence_data
+    }
 
-def get_timestamp():
-    return datetime.now().isoformat() + "Z"
+    print(f"[SEND] {payload}")
 
-def send_event(payload):
     try:
-        print(f"Sending event: {json.dumps(payload)}")
-        response = requests.post(API_URL, json=payload, timeout=5)
-        print(f"Status: {response.status_code}, Response: {response.text}")
+        r = requests.post(API_URL, json=payload, timeout=8)
+        print(f"[RESPONSE] {r.status_code} {r.text}")
+        return r
     except Exception as e:
-        print(f"Error sending request: {e}")
+        print(f"[ERROR] {e}")
+        return None
 
-def mode_normal(count, **kwargs):
-    print(f"Starting NORMAL simulation (count={count})...")
+# -------------------------
+# NORMAL
+# -------------------------
+def simulate_normal(count):
     for _ in range(count):
-        user = random.choice(TEST_USERS)
-        loc = random.choice(GEO_KEYS)
-        ip = GEO_IPS[loc]
+        user = random.choice(USERS)
+        features = [round(random.uniform(0.1, 0.3), 3) for _ in range(4)]
+        sequence = [[i % 4 + 1] for i in range(10)]  # stable pattern
+        send_event(user, features, sequence)
+        time.sleep(0.4)
 
-        payload = {
-            "username": user["username"],
-            "password": user["password"],
-            "ip": ip,
-            "timestamp": get_timestamp(),
-            "mode": "normal"
-        }
-        send_event(payload)
-        time.sleep(random.uniform(0.5, 2.0))
+# -------------------------
+# IMPOSSIBLE TRAVEL
+# -------------------------
+def simulate_impossible_travel():
+    user = random.choice(USERS)
 
-def mode_impossible_travel(user_arg, **kwargs):
-    # If user not specified, pick random
-    if user_arg:
-        user = next((u for u in TEST_USERS if u["username"] == user_arg), {"username": user_arg, "password": "password123"})
-    else:
-        user = random.choice(TEST_USERS)
+    features_1 = [0.2, 0.2, 0.2, 0.2]
+    seq_1 = [[1],[2],[3],[4],[1],[2]]
 
-    print(f"Starting IMPOSSIBLE TRAVEL simulation for user {user['username']}...")
+    features_2 = [100.0, 0.1, 0.1, 0.1]  # triggers impossible travel
+    seq_2 = [[1],[4],[1],[4],[1],[4]]
 
-    # Login 1: Location A
-    loc1 = "New York"
-    ip1 = GEO_IPS[loc1]
+    send_event(user, features_1, seq_1)
+    send_event(user, features_2, seq_2)
 
-    # Login 2: Location B (distant)
-    loc2 = "Tokyo"
-    ip2 = GEO_IPS[loc2]
+# -------------------------
+# BOT SCRIPT
+# -------------------------
+def simulate_bot_script(user=None, attempts=50):
+    if not user:
+        user = random.choice(USERS)
 
-    payload1 = {
-        "username": user["username"],
-        "password": user["password"],
-        "ip": ip1,
-        "timestamp": get_timestamp(),
-        "mode": "impossible_travel"
-    }
-    send_event(payload1)
+    features = [0.2, 0.2, 0.2, 0.2]  # repetitive
+    sequence = [[1] for _ in range(10)]  # bot-like uniform
 
-    # Rapid succession
-    print("sleeping briefly...")
-    time.sleep(1)
+    for _ in range(attempts):
+        send_event(user, features, sequence)
+        time.sleep(0.1)
 
-    payload2 = {
-        "username": user["username"],
-        "password": user["password"],
-        "ip": ip2,
-        "timestamp": get_timestamp(),
-        "mode": "impossible_travel"
-    }
-    send_event(payload2)
+# -------------------------
+# FRAUD RING
+# -------------------------
+def simulate_fraud_ring(group_size=5):
+    features_shared = [0.9, 0.9, 0.9, 0.9]  # triggers fraud ring
+    users = random.sample(USERS, group_size)
 
-def mode_bot_script(user_arg, rate, **kwargs):
-    # High frequency attempts
-    if user_arg:
-        user = next((u for u in TEST_USERS if u["username"] == user_arg), {"username": user_arg, "password": "password123"})
-    else:
-        user = random.choice(TEST_USERS)
+    for u in users:
+        seq = [[random.randint(1, 4)] for _ in range(10)]
+        send_event(u, features_shared, seq)
+        time.sleep(0.25)
 
-    count = rate if rate else 20
-    print(f"Starting BOT SCRIPT simulation for user {user['username']} (count={count})...")
-
-    for _ in range(count):
-        loc = random.choice(GEO_KEYS)
-        ip = GEO_IPS[loc]
-
-        payload = {
-            "username": user["username"],
-            "password": user["password"],
-            "ip": ip,
-            "timestamp": get_timestamp(),
-            "mode": "bot_script"
-        }
-        send_event(payload)
-        time.sleep(0.1) # Rapid
-
-def mode_fraud_ring(group_size, **kwargs):
-    size = group_size if group_size else 5
-    print(f"Starting FRAUD RING simulation (group_size={size})...")
-
-    # Same IP, different users
-    loc = random.choice(GEO_KEYS)
-    target_ip = GEO_IPS[loc]
-    print(f"Target Shared IP: {target_ip} ({loc})")
-
-    # Ensure we have enough users or reuse
-    users_to_use = []
-    while len(users_to_use) < size:
-        users_to_use.extend(TEST_USERS)
-    users_to_use = users_to_use[:size]
-
-    for user in users_to_use:
-        payload = {
-            "username": user["username"],
-            "password": user["password"],
-            "ip": target_ip,
-            "timestamp": get_timestamp(),
-            "mode": "fraud_ring"
-        }
-        send_event(payload)
-        time.sleep(0.2)
-
+# -------------------------
+# CLI
+# -------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Login Simulator for Secure Watch AI")
-    parser.add_argument("--mode", required=True, choices=["normal", "impossible_travel", "bot_script", "fraud_ring"], help="Simulation mode")
-    parser.add_argument("--count", type=int, default=1, help="Number of requests for normal mode")
-    parser.add_argument("--user", type=str, help="Specific username for impossible_travel or bot_script")
-    parser.add_argument("--rate", type=int, default=20, help="Number of requests for bot_script")
-    parser.add_argument("--group-size", type=int, default=5, help="Number of users for fraud_ring")
+    parser = argparse.ArgumentParser(description="AI Login Simulator")
 
-    args = parser.parse_args()
+    parser.add_argument("--mode", required=True, choices=[
+        "normal", "impossible_travel", "bot_script", "fraud_ring"
+    ])
 
-    try:
-        if args.mode == "normal":
-            mode_normal(count=args.count)
-        elif args.mode == "impossible_travel":
-            mode_impossible_travel(user_arg=args.user)
-        elif args.mode == "bot_script":
-            mode_bot_script(user_arg=args.user, rate=args.rate)
-        elif args.mode == "fraud_ring":
-            mode_fraud_ring(group_size=args.group_size)
-    except KeyboardInterrupt:
-        print("\nSimulation stopped by user.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    parser.add_argument("--count", type=int, default=10)
+    parser.add_argument("--attempts", type=int, default=50)
+    parser.add_argument("--user", type=str)
+    parser.add_argument("--group-size", type=int, default=5)
+
+    a = parser.parse_args()
+
+    if a.mode == "normal":
+        simulate_normal(a.count)
+    elif a.mode == "impossible_travel":
+        simulate_impossible_travel()
+    elif a.mode == "bot_script":
+        simulate_bot_script(a.user, a.attempts)
+    elif a.mode == "fraud_ring":
+        simulate_fraud_ring(a.group_size)
 
 if __name__ == "__main__":
     main()
