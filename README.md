@@ -167,6 +167,44 @@ Frontend runs at: **[http://localhost:5173](http://localhost:5173)**
 * Supports ngrok for live demos
 
 ---
+# 🎛️ Simulation Modes
+
+### 1️⃣ Normal / Verified Safe Traffic
+
+Triggers backend safe override (`features[0] = 0.1`).
+
+```
+python login_simulator.py --mode normal --count 10
+```
+
+### 2️⃣ Impossible Travel Attack
+
+Rapid unrealistic geolocation jump.
+
+```
+python login_simulator.py --mode impossible_travel
+```
+
+### 3️⃣ Bot Script Attack
+
+Repetitive, machine-like sequence patterns.
+
+```
+python login_simulator.py --mode bot_script --attempts 50
+python login_simulator.py --mode bot_script --user alice --attempts 100
+```
+
+### 4️⃣ Fraud Ring Cluster
+
+Multiple users sharing device fingerprint or network signature.
+
+```
+python login_simulator.py --mode fraud_ring --group-size 5
+```
+
+---
+
+
 
 ## 👨‍💻 Tech Stack
 
