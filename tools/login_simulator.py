@@ -7,10 +7,10 @@ import sys
 # Un-comment the one you are using:
 
 # 1. LOCALHOST (For testing on your laptop)
-# API_URL = "http://127.0.0.1:8000/security/analyze-login"
+API_URL = "http://127.0.0.1:8000/security/analyze-login"
 
 # 2. RENDER (For the Final Demo)
-API_URL = "https://finance-security-ai-monitor.onrender.com/security/analyze-login"
+# API_URL = "https://finance-security-ai-monitor.onrender.com/security/analyze-login"
 
 # Colors for Terminal
 GREEN = '\033[92m'
